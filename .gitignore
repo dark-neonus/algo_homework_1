@@ -39,3 +39,16 @@
 
 # debug information files
 *.dwo
+
+# Build directories
+build/
+cmake-build-*/
+
+# Generated test files
+test_*.csv
+sorted_*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
