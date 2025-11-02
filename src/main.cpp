@@ -6,70 +6,77 @@
 #include <random>
 #include <iomanip>
 
-// Random data generator for testing
-class TestDataGenerator {
+class DataHelper {
 private:
     std::mt19937 rng;
-    
-    std::vector<std::string> names = {"Іван", "Марія", "Петро", "Ольга", "Андрій", "Катерина", "Михайло", "Анна"};
-    std::vector<std::string> surnames = {"Шевченко", "Коваленко", "Бондаренко", "Ткаченко", "Кравченко", "Мельник", "Петренко", "Савченко"};
-    std::vector<std::string> groups = {"AAA-11", "BBB-22", "CCC-33", "DDD-44", "EEE-55"};
+    std::vector<Student> allStudents;
+    std::vector<std::string> uniqueNames;
+    std::vector<std::string> uniqueSurnames;
+    std::vector<std::string> uniqueGroups;
+    std::vector<std::string> uniqueEmails;
 
 public:
-    TestDataGenerator() : rng(std::random_device{}()) {}
+    DataHelper() : rng(std::random_device{}()) {}
 
-    void generateCSV(const std::string& filename, size_t count) {
-        std::ofstream file(filename);
-        std::uniform_int_distribution<> nameDist(0, names.size() - 1);
-        std::uniform_int_distribution<> surnameDist(0, surnames.size() - 1);
-        std::uniform_int_distribution<> yearDist(1950, 2010);
-        std::uniform_int_distribution<> monthDist(1, 12);
-        std::uniform_int_distribution<> dayDist(1, 28);
-        std::uniform_int_distribution<> groupDist(0, groups.size() - 1);
-        std::uniform_real_distribution<> ratingDist(0.0, 100.0);
+    void loadFullDataset(const std::string& filename) {
+        std::ifstream file(filename);
+        std::string line;
+        bool firstLine = true;
+        
+        std::set<std::string> names, surnames, groups;
+        
+        while (std::getline(file, line)) {
+            if (line.empty()) continue;
+            if (firstLine && line.find("m_name") == 0) {
+                firstLine = false;
+                continue;
+            }
+            firstLine = false;
+            
+            Student s = Student::fromCSV(line);
+            allStudents.push_back(s);
+            names.insert(s.m_name);
+            surnames.insert(s.m_surname);
+            groups.insert(s.m_group);
+            uniqueEmails.push_back(s.m_email);
+        }
+        
+        uniqueNames.assign(names.begin(), names.end());
+        uniqueSurnames.assign(surnames.begin(), surnames.end());
+        uniqueGroups.assign(groups.begin(), groups.end());
+    }
 
-        for (size_t i = 0; i < count; i++) {
-            std::string name = names[nameDist(rng)];
-            std::string surname = surnames[surnameDist(rng)];
-            std::string email = "student" + std::to_string(i) + "@student.org";
-            int year = yearDist(rng);
-            int month = monthDist(rng);
-            int day = dayDist(rng);
-            std::string group = groups[groupDist(rng)];
-            float rating = ratingDist(rng);
-            std::string phone = "38(099)12-34-567";
-
-            file << name << "," << surname << "," << email << ","
-                 << year << "," << month << "," << day << ","
-                 << group << "," << std::fixed << std::setprecision(2) << rating << "," << phone << "\n";
+    void createSubset(const std::string& outputFile, size_t count) {
+        std::ofstream file(outputFile);
+        for (size_t i = 0; i < std::min(count, allStudents.size()); i++) {
+            file << allStudents[i].toCSV() << "\n";
         }
     }
 
     std::string getRandomName() {
-        std::uniform_int_distribution<> dist(0, names.size() - 1);
-        return names[dist(rng)];
+        std::uniform_int_distribution<> dist(0, uniqueNames.size() - 1);
+        return uniqueNames[dist(rng)];
     }
 
     std::string getRandomSurname() {
-        std::uniform_int_distribution<> dist(0, surnames.size() - 1);
-        return surnames[dist(rng)];
+        std::uniform_int_distribution<> dist(0, uniqueSurnames.size() - 1);
+        return uniqueSurnames[dist(rng)];
     }
 
     std::string getRandomEmail(size_t maxId) {
-        std::uniform_int_distribution<> dist(0, maxId - 1);
-        return "student" + std::to_string(dist(rng)) + "@student.org";
+        std::uniform_int_distribution<> dist(0, std::min(maxId, uniqueEmails.size()) - 1);
+        return uniqueEmails[dist(rng)];
     }
 
     std::string getRandomGroup() {
-        std::uniform_int_distribution<> dist(0, groups.size() - 1);
-        return groups[dist(rng)];
+        std::uniform_int_distribution<> dist(0, uniqueGroups.size() - 1);
+        return uniqueGroups[dist(rng)];
     }
 };
 
-// Benchmark runner
 class Benchmark {
 private:
-    TestDataGenerator generator;
+    DataHelper dataHelper;
 
     void runOperations(IDatabase& db, size_t datasetSize, int A, int B, int C, double timeLimit) {
         std::mt19937 rng(std::random_device{}());
@@ -87,13 +94,13 @@ private:
             
             if (op == 0) {
                 // Operation 1: Find by name and surname
-                auto result = db.findByNameSurname(generator.getRandomName(), generator.getRandomSurname());
+                auto result = db.findByNameSurname(dataHelper.getRandomName(), dataHelper.getRandomSurname());
             } else if (op == 1) {
                 // Operation 2: Find groups with duplicate name+surname
                 auto result = db.findGroupsWithDuplicateNameSurname();
             } else {
                 // Operation 3: Update group by email
-                db.updateGroupByEmail(generator.getRandomEmail(datasetSize), generator.getRandomGroup());
+                db.updateGroupByEmail(dataHelper.getRandomEmail(datasetSize), dataHelper.getRandomGroup());
             }
             
             opsCount++;
@@ -103,14 +110,16 @@ private:
     }
 
 public:
+    void loadData(const std::string& filename) {
+        dataHelper.loadFullDataset(filename);
+    }
+
     void runBenchmark(const std::string& variantName, IDatabase& db, size_t datasetSize) {
         std::cout << "  Testing " << variantName << " with " << datasetSize << " records:" << std::endl;
 
-        // Generate test data
         std::string filename = "test_" + std::to_string(datasetSize) + ".csv";
-        generator.generateCSV(filename, datasetSize);
+        dataHelper.createSubset(filename, datasetSize);
 
-        // Load data and measure time
         auto loadStart = std::chrono::high_resolution_clock::now();
         db.loadFromFile(filename);
         auto loadEnd = std::chrono::high_resolution_clock::now();
@@ -126,14 +135,14 @@ public:
     void runSortBenchmark(size_t datasetSize) {
         std::cout << "\nSort benchmark with " << datasetSize << " records:" << std::endl;
 
-        // Generate test data
+        // Create subset of data
         std::string filename = "test_sort_" + std::to_string(datasetSize) + ".csv";
-        generator.generateCSV(filename, datasetSize);
+        dataHelper.createSubset(filename, datasetSize);
 
         HashMapDB db;
         db.loadFromFile(filename);
         
-        // Test standard sort
+        // Test std sort
         {
             auto students = db.getAllStudents();
             auto start = std::chrono::high_resolution_clock::now();
@@ -144,7 +153,7 @@ public:
             Sorter::saveToCSV(students, "sorted_standard.csv");
         }
 
-        // Test radix sort
+        // Test my radix sort
         {
             auto students = db.getAllStudents();
             auto start = std::chrono::high_resolution_clock::now();
@@ -161,9 +170,19 @@ int main() {
     std::cout << "=== Student Database Benchmark ===\n" << std::endl;
 
     Benchmark benchmark;
+    
+    std::cout << "Loading full dataset from students.csv..." << std::endl;
+    try {
+        benchmark.loadData("../students.csv");
+        std::cout << "Dataset loaded successfully\n" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Error loading students.csv: " << e.what() << std::endl;
+        std::cerr << "Make sure students.csv exists in the parent directory." << std::endl;
+        return 1;
+    }
+
     std::vector<size_t> sizes = {100, 1000, 10000, 100000};
 
-    // Test all three variants
     for (size_t size : sizes) {
         std::cout << "\n--- Dataset size: " << size << " ---" << std::endl;
         
@@ -183,33 +202,9 @@ int main() {
         }
     }
 
-    // Sort benchmarks
     std::cout << "\n\n=== Sort Benchmarks ===" << std::endl;
     for (size_t size : sizes) {
         benchmark.runSortBenchmark(size);
-    }
-
-    // Demonstrate sorting on actual data if students.csv exists
-    std::cout << "\n\n=== Sorting students.csv ===" << std::endl;
-    HashMapDB db;
-    try {
-        std::ifstream test("../students.csv");
-        if (!test.good()) {
-            std::cout << "students.csv file not found in parent directory" << std::endl;
-        } else {
-            db.loadFromFile("../students.csv");
-            auto students = db.getAllStudents();
-            
-            std::cout << "Loaded " << students.size() << " students" << std::endl;
-            
-            if (!students.empty()) {
-                Sorter::standardSort(students);
-                Sorter::saveToCSV(students, "students_sorted.csv");
-                std::cout << "Sorted students saved to students_sorted.csv" << std::endl;
-            }
-        }
-    } catch (const std::exception& e) {
-        std::cout << "Error: " << e.what() << std::endl;
     }
 
     return 0;
