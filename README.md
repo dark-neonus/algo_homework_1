@@ -8,42 +8,120 @@ Implementation of student database with three different data structure variants.
 - **Operation Ratio**: A=5, B=5, C=50
 - **Sort Task**: S4 (sort by surname, name)
 
-## Build
+## Build & Run
 
 ```bash
 mkdir build && cd build
 cmake ..
 make
-```
-
-## Run
-
-```bash
 ./algo_homework_1
 ```
 
-Program generates test datasets (100, 1K, 10K, 100K records) and benchmarks:
+Program generates test datasets (100, 1K, 10K, 100K records) and benchmarks all three variants plus sorting algorithms. Results are saved to `benchmark_results.csv` and `sort_results.csv`.
 
-- Load time and memory usage for each variant
-- Operations/10s for ratio 5:5:50
-- Sort performance (standard vs radix)
+## Visualization
+
+After running benchmarks, generate plots:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install matplotlib pandas
+python3 plot_results.py
+```
+
+This creates `benchmark_comparison.png` and `sort_comparison.png` showing performance metrics.
 
 ## Operations
 
-1. Find students by (name, surname)
-2. Find groups with duplicate (name, surname)
-3. Update group by email
+1. **Find students by (name, surname)** - searches for matching records
+2. **Find groups with duplicate (name, surname)** - identifies groups containing duplicate students
+3. **Update group by email** - modifies group assignment for a student
 
-## Variants
+## Three Implementation Variants
 
-- **Variant 1**: HashMap - O(1) lookup for operations 1,3
-- **Variant 2**: Mixed - minimal memory, linear search
-- **Variant 3**: Map/BST - O(log n) sorted access
+### Variant 1: HashMap (unordered_map) - optimal
 
-## Sorting
+- **Data structures**: `unordered_map<string, vector<size_t>>` for name/surname/email indices
+- **Complexity**: O(1) average for operations 1 and 3; O(n) for operation 2
+- **Memory**: Moderate (~28 MB for 100K records)
+- **Performance**: **BEST** - highest operations/10s across all dataset sizes
 
-- **Standard**: std::sort with custom comparator
-- **Radix**: MSD radix sort for string keys
+### Variant 2: Mixed (vector + minimal hash)
+
+- **Data structures**: `vector<Student>` + `unordered_map<string, size_t>` for email only
+- **Complexity**: O(n) for operations 1,2; O(1) for operation 3
+- **Memory**: **BEST** - lowest memory usage (~27 MB for 100K records)
+- **Performance**: Worst - dominated by linear searches (operations 1,2 occur 10% of the time each)
+
+### Variant 3: Map/BST (std::map)
+
+- **Data structures**: `map<string, vector<size_t>>` for name/surname/email indices
+- **Complexity**: O(log n) for operations 1,3; O(n) for operation 2
+- **Memory**: Highest (~28.5 MB for 100K records)
+- **Performance**: Second best - slower than HashMap but maintains sorted order
+
+## Experimental Results & Proof of Optimality
+
+**Test Configuration**: Operations ratio A:B:C = 5:5:50 (5% op1, 5% op2, 90% op3)
+
+### Performance Comparison (Operations completed in 10 seconds)
+
+| Dataset Size | Variant 1 (HashMap) | Variant 2 (Mixed) | Variant 3 (Map/BST) |
+|--------------|---------------------|-------------------|---------------------|
+| 100          | ~52M ops            | ~5M ops           | ~51M ops            |
+| 1,000        | ~1.5M ops           | ~312K ops         | ~1.3M ops           |
+| 10,000       | ~45K ops            | ~21K ops          | ~42K ops            |
+| 100,000      | ~3.3K ops           | ~1.3K ops         | ~3.3K ops           |
+
+### Why Variant 1 (HashMap) is Optimal
+
+**1. Performance Analysis**
+
+- Consistently achieves **highest operations/10s** across all dataset sizes
+- At 100K records: faster than Variant 2 and than Variant 3
+- O(1) average lookup dominates performance for operations 1 and 3
+
+**2. Memory Trade-off Justification**
+
+- Small tradoff of memmory for high performance vs Variant2
+
+**3. Operation Ratio Impact**
+
+- Given ratio 5:5:50, operation 3 (update by email) is the biggest part of computatiosn
+- HashMap provides O(1) email lookup, directly optimizing the dominant operation
+- Operations 1,2 also benefit from O(1) name/surname indexing
+
+**4. Scalability**
+
+- HashMap maintains **constant-time average** complexity as dataset grows
+- Variant 2 degrades linearly: 10K→100K = 10x slowdown observed
+- Variant 3 degrades logarithmically but with higher constant factors than HashMap
+
+### Conclusion
+
+**Variant 1 (HashMap with unordered_map) is the optimal choice** because:
+
+- Best performance on the primary metric (operations/10s)
+- O(1) average complexity for 85% of operations (ratio 5:5:50)
+- Minimal memory overhead compared to Variant 2
+- Excellent scalability with increasing dataset size
+- Simple implementation without complex balancing (vs BST)
+
+## Sorting Algorithms
+
+### Standard Sort (std::sort)
+
+- Uses `StudentComparator` for lexicographic ordering by (surname, name)
+- O(n log n) comparison-based sort
+- **Faster for this task** - optimized sort implementation
+
+### Radix Sort (MSD)
+
+- Custom MSD radix sort treating strings as byte sequences
+- Works correctly with UTF-8 Ukrainian text (Cyrillic byte ordering preserved)
+- O(n·k) where k = average string length
+- Slower in practice: high constant factors, cache-unfriendly memory access
 
 ## Exampel output
 
