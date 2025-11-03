@@ -47,8 +47,17 @@ cmake-build-*/
 # Generated test files
 test_*.csv
 sorted_*.csv
+benchmark_results.csv
+sort_results.csv
+
+# Generated plots
+*.png
 
 # IDE
 .vscode/
 .idea/
 *.swp
+
+*.zip
+
+.venv/
